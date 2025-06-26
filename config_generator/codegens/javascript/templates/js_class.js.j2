@@ -1,0 +1,74 @@
+{#-
+ # ==============================================================================
+ # TableCompiler Template
+ # Copyright (c) 2025, Alex Liao. All rights reserved.
+ #
+ # This template is part of the TableCompiler project.
+ # ==============================================================================
+-#}
+
+// ==============================================================================
+//  templates/js_class.js.j2
+// ==============================================================================
+import { DataReader } from "../data_reader.js";
+{% for field in fields %}
+{% if field.read_info.is_complex or (field.read_info.is_list and field.read_info.list_item.is_complex) %}
+import { {{ field.read_info.list_item.type if field.read_info.is_list else field.read_info.type }} } from "./{{ (field.read_info.list_item.type if field.read_info.is_list else field.read_info.type) | camel_case }}.js";
+{% endif %}
+{% if field.read_info.is_enum or (field.read_info.is_list and field.read_info.list_item.is_enum) %}
+import { {{ field.read_info.list_item.type if field.read_info.is_list else field.read_info.type }} } from "./{{ (field.read_info.list_item.type if field.read_info.is_list else field.read_info.type) | camel_case }}.js";
+{% endif %}
+{% endfor %}
+
+{# --- 这是一个递归宏，用于生成JS的读取逻辑 --- #}
+{%- macro read_logic(variable_name, read_info) -%}
+    {%- if read_info.is_collection -%}
+    const {{variable_name}}_count = reader.getInt32();
+    const {{variable_name}}_arr = new Array({{variable_name}}_count);
+    for (let i = 0; i < {{variable_name}}_count; i++) {
+        let {{variable_name}}_item;
+        {{ read_logic(variable_name + "_item", read_info.list_item) -}}
+        {{variable_name}}_arr[i] = {{variable_name}}_item;
+    }
+    {{variable_name}} = {{variable_name}}_arr;
+    {%- elif read_info.is_complex -%}
+    {{variable_name}} = {{read_info.type}}.read(reader);
+    {%- elif read_info.read_method == 'readString' -%}
+    {{variable_name}} = reader.readString();
+    {%- elif read_info.read_method == 'getBoolean' -%}
+    {{variable_name}} = reader.getBoolean();
+    {%- else -%}
+    {{variable_name}} = reader.{{read_info.read_method}}(true);
+    {%- endif -%}
+{%- endmacro -%}
+
+/**
+ * @typedef {object} I{{ class_name }}
+ {%- for field in fields %}
+ * @property { {{field.type}} } {{ field.name }} - {{ field.comment }}
+ {%- endfor %}
+ */
+
+/**
+ * @implements {I{{ class_name }}}
+ */
+export class {{ class_name }} {
+    {% for field in fields %}
+    {{ field.name }};
+    {% endfor %}
+
+    /**
+     * @param {DataReader} reader
+     * @returns {I{{ class_name }}}
+     */
+    static read(reader) {
+        const obj = new {{ class_name }}();
+        {% for field in fields %}
+        /** @type { {{field.type}} } */
+        let {{field.name}};
+        {{ read_logic(field.name, field.read_info) }}
+        obj.{{field.name}} = {{field.name}};
+        {% endfor %}
+        return obj;
+    }
+}

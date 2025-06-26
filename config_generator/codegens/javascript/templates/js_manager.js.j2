@@ -1,0 +1,72 @@
+{#-
+ # ==============================================================================
+ # TableCompiler Template
+ # Copyright (c) 2025, Alex Liao. All rights reserved.
+ #
+ # This template is part of the TableCompiler project.
+ # ==============================================================================
+-#}
+
+// ==============================================================================
+//  templates/js_manager.js.j2
+// ==============================================================================
+import { DataReader } from "./data_reader.js";
+import { {{ data_class_name }} } from "./{{ data_class_name | camel_case }}.js";
+
+export class {{ manager_name }} {
+    /** @type { {{ manager_name }} } */
+    static #instance;
+    
+    /** @type {Map<string, import("./{{ data_class_name | camel_case }}.js").I{{ data_class_name }} >} */
+    #dataMap = new Map();
+
+    /** @private */
+    constructor() {}
+
+    /** @returns { {{ manager_name }} } */
+    static get ins() {
+        if (!this.#instance) {
+            this.#instance = new {{ manager_name }}();
+        }
+        return this.#instance;
+    }
+
+    /**
+     * @param {ArrayBuffer} data
+     */
+    load(data) {
+        this.#dataMap.clear();
+        const reader = new DataReader(data);
+        const count = reader.getInt32();
+        for (let i = 0; i < count; i++) {
+            const entry = {{ data_class_name }}.read(reader);
+            const key = this.#getPrimaryKey(entry);
+            this.#dataMap.set(key, entry);
+        }
+    }
+
+    /**
+     * @returns {Array<import("./{{ data_class_name | camel_case }}.js").I{{ data_class_name }} >}
+     */
+    getAll() {
+        return Array.from(this.#dataMap.values());
+    }
+
+    /**
+     * @param  {...any} primaryKeyValues
+     * @returns {import("./{{ data_class_name | camel_case }}.js").I{{ data_class_name }} | undefined}
+     */
+    find(...primaryKeyValues) {
+        const key = primaryKeyValues.join('_');
+        return this.#dataMap.get(key);
+    }
+    
+    /**
+     * @private
+     * @param {import("./{{ data_class_name | camel_case }}.js").I{{ data_class_name }} } item
+     * @returns {string}
+     */
+    #getPrimaryKey(item) {
+        return [{% for field in primary_key_fields %}(item).{{ field }}{% if not loop.last %}, {% endif %}{% endfor %}].join('_');
+    }
+}

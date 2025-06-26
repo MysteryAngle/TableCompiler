@@ -1,0 +1,89 @@
+{#-
+ # ==============================================================================
+ # TableCompiler Template
+ # Copyright (c) 2025, Alex Liao. All rights reserved.
+ #
+ # This template is part of the TableCompiler project.
+ # ==============================================================================
+-#}
+
+// ==============================================================================
+//  templates/js_flat_singleton.js.j2
+// ==============================================================================
+import { DataReader } from "./data_reader.js";
+{% for field in fields %}
+{% if field.read_info.is_complex or (field.read_info.is_list and field.read_info.list_item.is_complex) %}
+import { {{ field.read_info.list_item.type if field.read_info.is_list else field.read_info.type }} } from "./{{ (field.read_info.list_item.type if field.read_info.is_list else field.read_info.type) | camel_case }}.js";
+{% endif %}
+{% if field.read_info.is_enum or (field.read_info.is_list and field.read_info.list_item.is_enum) %}
+import { {{ field.read_info.list_item.type if field.read_info.is_list else field.read_info.type }} } from "./{{ (field.read_info.list_item.type if field.read_info.is_list else field.read_info.type) | camel_case }}.js";
+{% endif %}
+{% endfor %}
+
+{# --- 这是一个与 js_class.js.j2 中完全相同的递归宏 --- #}
+{%- macro read_logic(variable_name, read_info) -%}
+    {%- if read_info.is_collection -%}
+    const {{variable_name}}_count = reader.getInt32();
+    const {{variable_name}}_arr = new Array({{variable_name}}_count);
+    for (let i = 0; i < {{variable_name}}_count; i++) {
+        let {{variable_name}}_item;
+        {{ read_logic(variable_name + "_item", read_info.list_item) -}}
+        {{variable_name}}_arr[i] = {{variable_name}}_item;
+    }
+    {{variable_name}} = {{variable_name}}_arr;
+    {%- elif read_info.is_complex -%}
+    {{variable_name}} = {{read_info.type}}.read(reader);
+    {%- elif read_info.read_method == 'readString' -%}
+    {{variable_name}} = reader.readString();
+    {%- elif read_info.read_method == 'getBoolean' -%}
+    {{variable_name}} = reader.getBoolean();
+    {%- else -%}
+    {{variable_name}} = reader.{{read_info.read_method}}(true);
+    {%- endif -%}
+{%- endmacro -%}
+
+/**
+ * Holds global configuration values from {{ excel_file_name }}.
+ */
+class {{ class_name }}Data {
+    {% for field in fields %}
+    /** * {{ field.comment }}
+     * @type { {{field.type}} } 
+     */
+    {{ field.name }};
+    {% endfor %}
+
+    constructor() {
+        // Initialize with default values
+        {% for field in fields %}
+        {% if "Array<" in field.type or "Set<" in field.type %}
+        this.{{ field.name }} = [];
+        {% elif field.type == 'number' %}
+        this.{{ field.name }} = 0;
+        {% elif field.type == 'bigint' %}
+        this.{{ field.name }} = BigInt(0);
+        {% elif field.type == 'string' %}
+        this.{{ field.name }} = "";
+        {% elif field.type == 'boolean' %}
+        this.{{ field.name }} = false;
+        {% else %}
+        this.{{ field.name }} = null;
+        {% endif %}
+        {% endfor %}
+    }
+
+    /**
+     * @param {ArrayBuffer} data
+     */
+    load(data) {
+        const reader = new DataReader(data);
+        {% for field in fields %}
+        /** @type { {{field.type}} } */
+        let {{field.name}};
+        {{ read_logic(field.name, field.read_info) }}
+        this.{{field.name}} = {{field.name}};
+        {% endfor %}
+    }
+}
+
+export const {{ class_name }} = new {{ class_name }}Data();

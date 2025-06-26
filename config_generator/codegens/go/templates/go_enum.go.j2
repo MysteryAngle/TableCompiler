@@ -1,0 +1,24 @@
+{#-
+ # ==============================================================================
+ # TableCompiler Template
+ # Copyright (c) 2025, Alex Liao. All rights reserved.
+ #
+ # This template is part of the TableCompiler project.
+ # ==============================================================================
+-#}
+
+// ==============================================================================
+//  templates/go_enum.go.j2
+//  用于生成枚举类型。
+// ==============================================================================
+package {{ package_name }}
+
+// {{ enum_name }} {{ comment_purpose }}
+type {{ enum_name }} {{ enum_base_type }}
+
+const (
+    {% for member in members %}
+    // {{ member.name }} ...
+    {{ enum_name }}_{{ member.name }} {{ enum_name }} = {{ member.value }}
+    {% endfor %}
+)

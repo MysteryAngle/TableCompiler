@@ -1,0 +1,89 @@
+{#-
+ # ==============================================================================
+ # TableCompiler Template
+ # Copyright (c) 2025, Alex Liao. All rights reserved.
+ #
+ # This template is part of the TableCompiler project.
+ # ==============================================================================
+-#}
+
+// ==============================================================================
+//  templates/csharp_manager.cs.j2
+//  用于为“标准表格”生成数据管理器类。
+// ==============================================================================
+#nullable enable
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+
+namespace {{ namespace }}
+{
+    /**
+     * <summary>
+     * Manages loading and accessing the {{ data_class_name }} configuration data.
+     * </summary>
+     */
+    public sealed class {{ manager_name }}
+    {
+        private static readonly {{ manager_name }} instance = new {{ manager_name }}();
+        
+        /// <summary>
+        /// Gets the singleton instance of the manager.
+        /// </summary>
+        public static {{ manager_name }} Instance => instance;
+
+        private readonly Dictionary<string, {{ data_class_name }}> _dataMap = new();
+
+        private {{ manager_name }}() { }
+
+        /// <summary>
+        /// Loads and parses configuration data from a byte array.
+        /// </summary>
+        /// <param name="bytes">The byte array containing the binary data.</param>
+        public void Load(byte[] bytes)
+        {
+            _dataMap.Clear();
+            using var stream = new MemoryStream(bytes);
+            using var reader = new BinaryReader(stream);
+            
+            int count = reader.ReadInt32();
+            for (int i = 0; i < count; i++)
+            {
+                var entry = new {{ data_class_name }}();
+                entry.Read(reader);
+                
+                string key = GetPrimaryKey(entry);
+                if (!_dataMap.ContainsKey(key))
+                {
+                    _dataMap.Add(key, entry);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets a list of all configuration entries.
+        /// </summary>
+        /// <returns>A list of all {{ data_class_name }} objects.</returns>
+        public List<{{ data_class_name }}> GetAll()
+        {
+            return _dataMap.Values.ToList();
+        }
+
+        /// <summary>
+        /// Finds a specific configuration entry by its primary key(s).
+        /// </summary>
+        /// <param name="primaryKeyValues">The values of the primary key(s).</param>
+        /// <returns>The found {{ data_class_name }} object, or null if not found.</returns>
+        public {{ data_class_name }}? Find(params object[] primaryKeyValues)
+        {
+            string key = string.Join("_", primaryKeyValues.Select(v => v.ToString()));
+            _dataMap.TryGetValue(key, out var result);
+            return result;
+        }
+
+        private static string GetPrimaryKey({{ data_class_name }} item)
+        {
+            return string.Join("_", new object[] { {% for field in primary_key_fields %}item.{{ field }}{% if not loop.last %}, {% endif %}{% endfor %} });
+        }
+    }
+}

@@ -1,0 +1,53 @@
+{#-
+ # ==============================================================================
+ # TableCompiler Template
+ # Copyright (c) 2025, Alex Liao. All rights reserved.
+ #
+ # This template is part of the TableCompiler project.
+ # ==============================================================================
+-#}
+
+// ==============================================================================
+//  templates/ts_manager.ts.j2
+//  用于为“标准表格”生成数据管理器类。
+// ==============================================================================
+import { DataReader } from "./data_reader";
+import { I{{ data_class_name }}, {{ data_class_name }} } from "./{{ data_class_name | camel_case }}";
+
+export class {{ manager_name }} {
+    private static instance: {{ manager_name }};
+    private dataMap: Map<string, I{{ data_class_name }}> = new Map();
+
+    private constructor() {}
+
+    public static get ins(): {{ manager_name }} {
+        if (!{{ manager_name }}.instance) {
+            {{ manager_name }}.instance = new {{ manager_name }}();
+        }
+        return {{ manager_name }}.instance;
+    }
+
+    public load(data: ArrayBuffer): void {
+        this.dataMap.clear();
+        const reader = new DataReader(data);
+        const count = reader.getInt32();
+        for (let i = 0; i < count; i++) {
+            const entry = {{ data_class_name }}.read(reader);
+            const key = this.getPrimaryKey(entry);
+            this.dataMap.set(key, entry);
+        }
+    }
+
+    public getAll(): readonly I{{ data_class_name }}[] {
+        return Array.from(this.dataMap.values());
+    }
+
+    public find(...primaryKeyValues: any[]): I{{ data_class_name }} | undefined {
+        const key = primaryKeyValues.join('_');
+        return this.dataMap.get(key);
+    }
+
+    private getPrimaryKey(item: I{{ data_class_name }}): string {
+        return [{% for field in primary_key_fields %}(item as any).{{ field }}{% if not loop.last %}, {% endif %}{% endfor %}].join('_');
+    }
+}

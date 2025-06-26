@@ -1,0 +1,7 @@
+{
+    "ExcelFileName": "Global.xlsx",
+    "TargetType": "Global",
+    "Comment": "Stores global configuration variables for the game.",
+    "IsFlatTable": true,
+    "ImportTypes": [ "InnerTypes/Item", "InnerTypes/RateItem" ]
+}

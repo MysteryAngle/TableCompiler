@@ -1,0 +1,91 @@
+{#-
+ # ==============================================================================
+ # TableCompiler Template
+ # Copyright (c) 2025, Alex Liao. All rights reserved.
+ #
+ # This template is part of the TableCompiler project.
+ # ==============================================================================
+-#}
+
+// ==============================================================================
+//  templates/csharp_flat_singleton.cs.j2
+//  用于为“平铺式表格”生成单例配置类。
+// ==============================================================================
+#nullable enable
+using System.Collections.Generic;
+using System.IO;
+{%- for ns in imports %}
+using {{ ns }};
+{%- endfor %}
+
+namespace {{ namespace }}
+{
+    /**
+     * <summary>
+     * {{ struct_comment }}
+     * </summary>
+     */
+    public sealed class {{ class_name }}
+    {
+        /// <summary>
+        /// Gets the singleton instance of the configuration.
+        /// </summary>
+        public static {{ class_name }} Instance { get; } = new {{ class_name }}();
+
+        {% for field in fields %}
+        /// <summary>
+        /// {{ field.comment }}
+        /// </summary>
+        public {{ field.type }} {{ field.name }} { get; private set; }
+        {% endfor %}
+
+        private {{ class_name }}() 
+        {
+            {%- for field in fields %}
+            {%- if field.is_list %}
+            this.{{ field.name }} = new {{ field.type }}();
+            {%- endif %}
+            {%- endfor %}
+        }
+
+        /// <summary>
+        /// Loads and parses configuration data from a byte array.
+        /// </summary>
+        /// <param name="bytes">The byte array containing the binary data.</param>
+        public void Load(byte[] bytes)
+        {
+            using var stream = new MemoryStream(bytes);
+            using var reader = new BinaryReader(stream);
+
+{%- for field in fields %}
+{%- if field.read_info.is_list %}
+            int count_{{ field.name }} = reader.ReadInt32();
+            var list_{{ field.name }} = new {{ field.type }}(count_{{ field.name }});
+            for (int i = 0; i < count_{{ field.name }}; i++)
+            {
+                {{ field.read_info.list_item.type }} listItem;
+    {%- if field.read_info.list_item.is_complex %}
+                var tempObj = new {{ field.read_info.list_item.type }}();
+                tempObj.Read(reader);
+                listItem = tempObj;
+    {%- elif field.read_info.list_item.is_enum %}
+                listItem = ({{ field.read_info.list_item.type }})reader.ReadInt32();
+    {%- else %}
+                listItem = {{ field.read_info.list_item.read_method }};
+    {%- endif %}
+                list_{{ field.name }}.Add(listItem);
+            }
+            this.{{ field.name }} = list_{{ field.name }};
+{%- elif field.read_info.is_complex %}
+            var tempObj_{{field.name}} = new {{ field.type }}();
+            tempObj_{{field.name}}.Read(reader);
+            this.{{ field.name }} = tempObj_{{field.name}};
+{%- elif field.read_info.is_enum %}
+            this.{{ field.name }} = ({{ field.type }})reader.ReadInt32();
+{%- else %}
+            this.{{ field.name }} = {{ field.read_info.read_method }};
+{%- endif -%}
+{%- endfor %}
+        }
+    }
+}

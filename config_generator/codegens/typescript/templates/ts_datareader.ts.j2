@@ -1,0 +1,60 @@
+{#-
+ # ==============================================================================
+ # TableCompiler Template
+ # Copyright (c) 2025, Alex Liao. All rights reserved.
+ #
+ # This template is part of the TableCompiler project.
+ # ==============================================================================
+-#}
+
+// ==============================================================================
+//  templates/ts_datareader.ts.j2
+//  这是一个辅助类，所有TS文件都会依赖它。
+// ==============================================================================
+/**
+ * A helper class to read data sequentially from an ArrayBuffer.
+ */
+export class DataReader {
+    private view: DataView;
+    private offset: number = 0;
+    private textDecoder: TextDecoder;
+
+    constructor(buffer: ArrayBuffer) {
+        this.view = new DataView(buffer);
+        this.textDecoder = new TextDecoder("utf-8");
+    }
+
+    public getInt32(littleEndian: boolean = true): number {
+        const value = this.view.getInt32(this.offset, littleEndian);
+        this.offset += 4;
+        return value;
+    }
+
+    public getBigInt64(littleEndian: boolean = true): bigint {
+        const value = this.view.getBigInt64(this.offset, littleEndian);
+        this.offset += 8;
+        return value;
+    }
+
+    public getFloat32(littleEndian: boolean = true): number {
+        const value = this.view.getFloat32(this.offset, littleEndian);
+        this.offset += 4;
+        return value;
+    }
+
+    public getBoolean(): boolean {
+        const value = this.view.getUint8(this.offset);
+        this.offset += 1;
+        return value !== 0;
+    }
+
+    public readString(): string {
+        const length = this.getInt32();
+        if (length <= 0) {
+            return "";
+        }
+        const stringBuffer = new Uint8Array(this.view.buffer, this.offset, length);
+        this.offset += length;
+        return this.textDecoder.decode(stringBuffer);
+    }
+}

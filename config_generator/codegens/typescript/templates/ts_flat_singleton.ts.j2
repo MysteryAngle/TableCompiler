@@ -1,0 +1,64 @@
+{#-
+ # ==============================================================================
+ # TableCompiler Template
+ # Copyright (c) 2025, Alex Liao. All rights reserved.
+ #
+ # This template is part of the TableCompiler project.
+ # ==============================================================================
+-#}
+
+// ==============================================================================
+//  templates/ts_flat_singleton.ts.j2
+//  用于为“平铺式表格”生成单例配置对象。
+// ==============================================================================
+import { DataReader } from "./data_reader";
+{% for statement in import_statements -%}
+{{ statement }}
+{% endfor %}
+
+{# --- 这是一个与 ts_interface.ts.j2 中完全相同的递归宏 --- #}
+{%- macro read_logic(variable_name, read_info) -%}
+    {%- if read_info.is_collection -%}
+    const {{variable_name}}_count = reader.getInt32();
+    const {{variable_name}}_arr: {{read_info.type}} = new Array({{variable_name}}_count);
+    for (let i = 0; i < {{variable_name}}_count; i++) {
+        let {{variable_name}}_item: {{ read_info.list_item.type }};
+        {{- read_logic(variable_name + "_item", read_info.list_item) -}}
+        {{variable_name}}_arr[i] = {{variable_name}}_item;
+    }
+    {{variable_name}} = {{variable_name}}_arr;
+    {%- elif read_info.is_complex -%}
+    {{variable_name}} = {{read_info.type}}.read(reader);
+    {%- elif read_info.is_enum -%}
+    {{variable_name}} = reader.getInt32() as {{read_info.type}};
+    {%- elif read_info.read_method == 'readString' -%}
+    {{variable_name}} = reader.readString();
+    {%- elif read_info.read_method == 'getBoolean' -%}
+    {{variable_name}} = reader.getBoolean();
+    {%- else -%}
+    {{variable_name}} = reader.{{read_info.read_method}}(true);
+    {%- endif -%}
+{%- endmacro -%}
+
+/**
+ * {{ struct_comment }}
+ */
+class {{ class_name }}Data {
+    {% for field in fields %}
+    /**
+     * {{ field.comment }}
+     */
+    public readonly {{ field.name }}!: {{ field.type }};
+    {% endfor %}
+
+    public load(data: ArrayBuffer): void {
+        const reader = new DataReader(data);
+        {% for field in fields %}
+        let {{field.name}}: {{field.type}};
+        {{ read_logic(field.name, field.read_info) }}
+        (this as any).{{field.name}} = {{field.name}};
+        {% endfor %}
+    }
+}
+
+export const {{ class_name | camel_case }} = new {{ class_name }}Data();

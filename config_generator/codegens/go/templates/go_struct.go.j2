@@ -1,0 +1,97 @@
+{#-
+ # ==============================================================================
+ # TableCompiler Template
+ # Copyright (c) 2025, Alex Liao. All rights reserved.
+ #
+ # This template is part of the TableCompiler project.
+ # ==============================================================================
+-#}
+
+// ==============================================================================
+//  templates/go_struct.go.j2
+//  用于生成标准表中的数据结构，或可复用的自定义类型结构。
+// ==============================================================================
+package {{ package_name }}
+
+import (
+	"bytes"
+	"encoding/binary"
+	"fmt"
+	"io"
+)
+
+// {{ class_name }} {{ struct_comment }}
+type {{ class_name }} struct {
+    {%- for field in fields %}
+    {{ field.name }} {{ field.type }} `json:"{{ field.json_name }}"` // {{ field.comment }}
+    {%- endfor %}
+}
+
+{# --- 这是一个递归宏，用于生成 Go 的读取逻辑 --- #}
+{%- macro read_logic(variable_name, read_info) -%}
+    {%- if read_info.is_collection -%}
+    var {{variable_name}}_count int32
+    if err := binary.Read(reader, binary.LittleEndian, &{{variable_name}}_count); err != nil {
+        return fmt.Errorf("failed to read count for {{variable_name}}: %w", err)
+    }
+    if {{variable_name}}_count > 0 {
+        {{variable_name}}_slice := make({{read_info.type}}, {{variable_name}}_count)
+        for i := int32(0); i < {{variable_name}}_count; i++ {
+            {{ read_logic(variable_name + "_item", read_info.list_item) -}}
+            {{variable_name}}_slice[i] = {{variable_name}}_item
+        }
+        *{{variable_name}} = {{variable_name}}_slice
+    } else {
+        // 如果数量为0，确保切片不是 nil，而是一个空切片
+        *{{variable_name}} = make({{read_info.type}}, 0)
+    }
+    {%- elif read_info.is_complex -%}
+    {{variable_name}}_obj := &{{read_info.type | replace('*', '')}}{}
+    if err := {{variable_name}}_obj.Read(reader); err != nil {
+        return fmt.Errorf("failed to read complex type {{read_info.type}}: %w", err)
+    }
+    *{{variable_name}} = {{variable_name}}_obj
+    {%- elif read_info.is_enum -%}
+    var {{variable_name}}_val int32
+    if err := binary.Read(reader, binary.LittleEndian, &{{variable_name}}_val); err != nil {
+        return fmt.Errorf("failed to read enum value for {{variable_name}}: %w", err)
+    }
+    *{{variable_name}} = {{read_info.type}}({{variable_name}}_val)
+    {%- else -%}
+    if err := binary.Read(reader, binary.LittleEndian, {{variable_name}}); err != nil {
+        return fmt.Errorf("failed to read primitive for {{variable_name}}: %w", err)
+    }
+    {%- endif -%}
+{%- endmacro -%}
+
+// Read populates the struct with data from the reader.
+func (s *{{ class_name }}) Read(reader *bytes.Reader) error {
+    var err error
+    _ = err // to avoid "declared and not used" error if no fields use it
+
+    {% for field in fields %}
+    // --- Read field {{ field.name }} ---
+    {% if field.type == "string" %}
+    var {{field.name | lower}}_len int32
+    if err = binary.Read(reader, binary.LittleEndian, &{{field.name | lower}}_len); err != nil {
+        return fmt.Errorf("failed to read string length for {{field.name}}: %w", err)
+    }
+    if {{field.name | lower}}_len > 0 {
+        {{field.name | lower}}_buf := make([]byte, {{field.name | lower}}_len)
+        if _, err = io.ReadFull(reader, {{field.name | lower}}_buf); err != nil {
+            return fmt.Errorf("failed to read string data for {{field.name}}: %w", err)
+        }
+        s.{{field.name}} = string({{field.name | lower}}_buf)
+    }
+    {% elif field.read_info.is_collection %}
+    {{ read_logic("&s." + field.name, field.read_info) }}
+    {% elif field.read_info.is_complex %}
+    {{ read_logic("&s." + field.name, field.read_info) }}
+    {% else %}
+    if err = binary.Read(reader, binary.LittleEndian, &s.{{field.name}}); err != nil {
+        return fmt.Errorf("failed to read field {{field.name}}: %w", err)
+    }
+    {% endif %}
+    {% endfor %}
+    return nil
+}

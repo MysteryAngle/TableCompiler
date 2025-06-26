@@ -1,0 +1,74 @@
+{#-
+ # ==============================================================================
+ # TableCompiler Template
+ # Copyright (c) 2025, Alex Liao. All rights reserved.
+ #
+ # This template is part of the TableCompiler project.
+ # ==============================================================================
+-#}
+
+// ==============================================================================
+//  templates/csharp_class.cs.j2
+//  用于生成标准表中的数据类，或可复用的自定义类型类。
+// ==============================================================================
+#nullable enable
+using System.Collections.Generic;
+using System.IO;
+{%- for ns in imports %}
+using {{ ns }};
+{%- endfor %}
+
+namespace {{ namespace }}
+{
+    /**
+     * <summary>
+     * {{ struct_comment }}
+     * </summary>
+     */
+    public partial class {{ class_name }}
+    {
+        {%- for field in fields %}
+        /// <summary>
+        /// {{ field.comment }}
+        /// </summary>
+        public {{ field.type }} {{ field.name }} { get; private set; }
+        {% endfor %}
+
+        /// <summary>
+        /// Populates the object with data from a binary stream.
+        /// </summary>
+        /// <param name="reader">The binary reader to read data from.</param>
+        public void Read(BinaryReader reader)
+        {
+{%- for field in fields -%}
+{%- if field.read_info.is_list %}
+            int count_{{ field.name }} = reader.ReadInt32();
+            var list_{{ field.name }} = new {{ field.type }}(count_{{ field.name }});
+            for (int i = 0; i < count_{{ field.name }}; i++)
+            {
+                {{ field.read_info.list_item.type }} listItem;
+    {%- if field.read_info.list_item.is_complex %}
+                var tempObj = new {{ field.read_info.list_item.type }}();
+                tempObj.Read(reader);
+                listItem = tempObj;
+    {%- elif field.read_info.list_item.is_enum %}
+                listItem = ({{ field.read_info.list_item.type }})reader.ReadInt32();
+    {%- else %}
+                listItem = {{ field.read_info.list_item.read_method }};
+    {%- endif %}
+                list_{{ field.name }}.Add(listItem);
+            }
+            this.{{ field.name }} = list_{{ field.name }};
+{%- elif field.read_info.is_complex %}
+            var tempObj_{{field.name}} = new {{ field.type }}();
+            tempObj_{{field.name}}.Read(reader);
+            this.{{ field.name }} = tempObj_{{field.name}};
+{%- elif field.read_info.is_enum %}
+            this.{{ field.name }} = ({{ field.type }})reader.ReadInt32();
+{%- else %}
+            this.{{ field.name }} = {{ field.read_info.read_method }};
+{%- endif -%}
+{% endfor %}
+        }
+    }
+}

@@ -1,0 +1,83 @@
+{#-
+ # ==============================================================================
+ # TableCompiler Template
+ # Copyright (c) 2025, Alex Liao. All rights reserved.
+ #
+ # This template is part of the TableCompiler project.
+ # ==============================================================================
+-#}
+
+// ==============================================================================
+//  templates/java_flat_singleton.java.j2
+//  用于为“平铺式表格”生成单例配置类。
+// ==============================================================================
+package {{ package_name }};
+
+import java.io.ByteArrayInputStream;
+import java.io.DataInputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * {{ struct_comment }}
+ */
+public final class {{ class_name }} {
+
+    public static final {{ class_name }} instance = new {{ class_name }}();
+
+    {% for field in fields %}
+    /**
+     * {{ field.comment }}
+     */
+    private {{ field.type }} {{ field.name }};
+    {% endfor %}
+
+    private {{ class_name }}() {
+        // Default values can be set here if needed
+    }
+
+    public void load(byte[] bytes) throws IOException {
+        try (ByteArrayInputStream bis = new ByteArrayInputStream(bytes);
+             DataInputStream reader = new DataInputStream(bis)) {
+
+            {% for field in fields %}
+            {%- if field.read_info.is_list %}
+            int count_{{ field.name }} = reader.readInt();
+            List<{{ field.read_info.list_item.type }}> list_{{ field.name }} = new ArrayList<>(count_{{ field.name }});
+            for (int i = 0; i < count_{{ field.name }}; i++) {
+                {{ field.read_info.list_item.type }} listItem;
+                {%- if field.read_info.list_item.is_complex %}
+                listItem = new {{ field.read_info.list_item.type }}();
+                listItem.read(reader);
+                {%- elif field.read_info.list_item.is_enum %}
+                listItem = {{ field.read_info.list_item.type }}.fromValue(reader.readInt());
+                {%- else %}
+                listItem = reader.{{ field.read_info.list_item.read_method }};
+                {%- endif %}
+                list_{{ field.name }}.add(listItem);
+            }
+            this.{{ field.name }} = list_{{ field.name }};
+            {%- elif field.read_info.is_complex %}
+            this.{{ field.name }} = new {{ field.type }}();
+            this.{{ field.name }}.read(reader);
+            {%- elif field.read_info.is_enum %}
+            this.{{ field.name }} = {{ field.type }}.fromValue(reader.readInt());
+            {%- else %}
+            this.{{ field.name }} = reader.{{ field.read_info.read_method }};
+            {%- endif %}
+            {% endfor %}
+        }
+    }
+
+    {% for field in fields %}
+    /**
+     * @return {{ field.comment }}
+     */
+    public {{ field.type }} get{{ field.pascal_name }}() {
+        return this.{{ field.name }};
+    }
+    {% endfor %}
+}

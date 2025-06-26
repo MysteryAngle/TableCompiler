@@ -1,0 +1,26 @@
+{
+    "ImportTypes": [],
+    "TypeDefines": {
+        "RateItem": {
+            "TargetType": "Common/RateItem",
+            "Comment": "带几率的物品数据",
+            "FieldSequence": [
+                {
+                    "Field": "ItemId",
+                    "Type": "int",
+                    "Comment": "物品ID"
+                },
+                {
+                    "Field": "Count",
+                    "Type": "long",
+                    "Comment": "物品数量"
+                },
+                {
+                    "Field": "Rate",
+                    "Type": "float",
+                    "Comment": "几率"
+                }
+            ]
+        }
+    }
+}

@@ -1,0 +1,74 @@
+{#-
+ # ==============================================================================
+ # TableCompiler Template
+ # Copyright (c) 2025, Alex Liao. All rights reserved.
+ #
+ # This template is part of the TableCompiler project.
+ # ==============================================================================
+-#}
+
+// ==============================================================================
+//  templates/java_manager.java.j2
+//  用于为“标准表格”生成数据管理器类。
+// ==============================================================================
+package {{ package_name }};
+
+import java.io.ByteArrayInputStream;
+import java.io.DataInputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+/**
+ * Manages loading and accessing the {{ data_class_name }} configuration data.
+ */
+public final class {{ manager_name }} {
+
+    private static final {{ manager_name }} instance = new {{ manager_name }}();
+    private final Map<String, {{ data_class_name }}> dataMap = new HashMap<>();
+
+    private {{ manager_name }}() {}
+
+    public static {{ manager_name }} getInstance() {
+        return instance;
+    }
+
+    public void load(byte[] bytes) throws IOException {
+        dataMap.clear();
+        try (ByteArrayInputStream bis = new ByteArrayInputStream(bytes);
+             DataInputStream reader = new DataInputStream(bis)) {
+            
+            int count = reader.readInt();
+            for (int i = 0; i < count; i++) {
+                {{ data_class_name }} entry = new {{ data_class_name }}();
+                entry.read(reader);
+                
+                String key = getPrimaryKey(entry);
+                if (!dataMap.containsKey(key)) {
+                    dataMap.put(key, entry);
+                }
+            }
+        }
+    }
+
+    public List<{{ data_class_name }}> getAll() {
+        return new ArrayList<>(dataMap.values());
+    }
+
+    public {{ data_class_name }} find(Object... primaryKeyValues) {
+        String key = Stream.of(primaryKeyValues)
+                           .map(String::valueOf)
+                           .collect(Collectors.joining("_"));
+        return dataMap.get(key);
+    }
+
+    private static String getPrimaryKey({{ data_class_name }} item) {
+        return Stream.of({% for field in primary_key_fields %}item.get{{ field }}(){% if not loop.last %}, {% endif %}{% endfor %})
+                     .map(String::valueOf)
+                     .collect(Collectors.joining("_"));
+    }
+}

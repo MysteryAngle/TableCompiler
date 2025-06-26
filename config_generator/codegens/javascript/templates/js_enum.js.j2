@@ -1,0 +1,21 @@
+{#-
+ # ==============================================================================
+ # TableCompiler Template
+ # Copyright (c) 2025, Alex Liao. All rights reserved.
+ #
+ # This template is part of the TableCompiler project.
+ # ==============================================================================
+-#}
+
+// ==============================================================================
+//  templates/js_enum.js.j2
+// ==============================================================================
+/**
+ * @readonly
+ * @enum {number}
+ */
+export const {{ enum_name }} = Object.freeze({
+    {% for member in members %}
+    /** {{ member.comment }} */
+    {{ member.name }}: {{ member.value }},{% endfor %}
+});

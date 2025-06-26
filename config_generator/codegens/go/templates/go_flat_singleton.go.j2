@@ -1,0 +1,113 @@
+{#-
+ # ==============================================================================
+ # TableCompiler Template
+ # Copyright (c) 2025, Alex Liao. All rights reserved.
+ #
+ # This template is part of the TableCompiler project.
+ # ==============================================================================
+-#}
+
+// ==============================================================================
+//  templates/go_flat_singleton.go.j2
+//  用于为“平铺式表格”生成单例配置。
+// ==============================================================================
+package {{ package_name }}
+
+import (
+    "bytes"
+    "encoding/binary"
+    "fmt"
+    "io"
+    "sync"
+)
+
+var (
+    _{{ class_name | pascal_case(False) }}Instance *{{ class_name }}
+    _{{ class_name | pascal_case(False) }}Once     sync.Once
+)
+
+// {{ class_name }} {{ struct_comment }}
+type {{ class_name }} struct {
+    {%- for field in fields %}
+    // {{ field.comment }}
+    {{ field.name }} {{ field.type }} `json:"{{ field.json_name }}"`
+    {%- endfor %}
+}
+
+// Get{{ class_name }} returns the singleton instance of the configuration.
+func Get{{ class_name }}() *{{ class_name }} {
+    _{{ class_name | pascal_case(False) }}Once.Do(func() {
+        _{{ class_name | pascal_case(False) }}Instance = &{{ class_name }}{}
+    })
+    return _{{ class_name | pascal_case(False) }}Instance
+}
+
+{# --- 这是一个与 go_struct.go.j2 中完全相同的递归宏 --- #}
+{%- macro read_logic(variable_name, read_info) -%}
+    {%- if read_info.is_collection -%}
+    var {{variable_name}}_count int32
+    if err := binary.Read(reader, binary.LittleEndian, &{{variable_name}}_count); err != nil {
+        return fmt.Errorf("failed to read count for {{variable_name}}: %w", err)
+    }
+    if {{variable_name}}_count > 0 {
+        {{variable_name}}_slice := make({{read_info.type}}, {{variable_name}}_count)
+        for i := int32(0); i < {{variable_name}}_count; i++ {
+            {{ read_logic(variable_name + "_item", read_info.list_item) -}}
+            {{variable_name}}_slice[i] = {{variable_name}}_item
+        }
+        *{{variable_name}} = {{variable_name}}_slice
+    } else {
+        *{{variable_name}} = make({{read_info.type}}, 0)
+    }
+    {%- elif read_info.is_complex -%}
+    {{variable_name}}_obj := &{{read_info.type | replace('*', '')}}{}
+    if err := {{variable_name}}_obj.Read(reader); err != nil {
+        return fmt.Errorf("failed to read complex type {{read_info.type}}: %w", err)
+    }
+    *{{variable_name}} = {{variable_name}}_obj
+    {%- elif read_info.is_enum -%}
+    var {{variable_name}}_val int32
+    if err := binary.Read(reader, binary.LittleEndian, &{{variable_name}}_val); err != nil {
+        return fmt.Errorf("failed to read enum value for {{variable_name}}: %w", err)
+    }
+    *{{variable_name}} = {{read_info.type}}({{variable_name}}_val)
+    {%- else -%}
+    if err := binary.Read(reader, binary.LittleEndian, {{variable_name}}); err != nil {
+        return fmt.Errorf("failed to read primitive for {{variable_name}}: %w", err)
+    }
+    {%- endif -%}
+{%- endmacro -%}
+
+// Load populates the singleton with data from the byte array.
+func (s *{{ class_name }}) Load(data []byte) error {
+    reader := bytes.NewReader(data)
+    var err error
+    _ = err
+
+    {% for field in fields %}
+    // --- Read property {{ field.name }} ---
+    {% if field.type == "string" %}
+    var {{field.name | lower}}_len int32
+    if err = binary.Read(reader, binary.LittleEndian, &{{field.name | lower}}_len); err != nil {
+        return fmt.Errorf("failed to read string length for {{field.name}}: %w", err)
+    }
+    if {{field.name | lower}}_len > 0 {
+        {{field.name | lower}}_buf := make([]byte, {{field.name | lower}}_len)
+        if _, err = io.ReadFull(reader, {{field.name | lower}}_buf); err != nil {
+            return fmt.Errorf("failed to read string data for {{field.name}}: %w", err)
+        }
+        s.{{field.name}} = string({{field.name | lower}}_buf)
+    }
+    {% elif field.read_info.is_collection %}
+    {{ read_logic("&s." + field.name, field.read_info) }}
+    {% elif field.read_info.is_complex %}
+    {{ read_logic("&s." + field.name, field.read_info) }}
+    {% else %}
+    if err = binary.Read(reader, binary.LittleEndian, &s.{{field.name}}); err != nil {
+        return fmt.Errorf("failed to read field {{field.name}}: %w", err)
+    }
+    {% endif %}
+    {% endfor %}
+
+    return nil
+}

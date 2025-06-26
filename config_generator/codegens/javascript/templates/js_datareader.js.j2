@@ -1,0 +1,83 @@
+{#-
+ # ==============================================================================
+ # TableCompiler Template
+ # Copyright (c) 2025, Alex Liao. All rights reserved.
+ #
+ # This template is part of the TableCompiler project.
+ # ==============================================================================
+-#}
+
+// ==============================================================================
+//  templates/js_datareader.js.j2
+// ==============================================================================
+/**
+ * A helper class to read data sequentially from an ArrayBuffer.
+ */
+export class DataReader {
+    /** @type {DataView} */
+    #view;
+    /** @type {number} */
+    #offset = 0;
+    /** @type {TextDecoder} */
+    #textDecoder;
+
+    /**
+     * @param {ArrayBuffer} buffer
+     */
+    constructor(buffer) {
+        this.#view = new DataView(buffer);
+        this.#textDecoder = new TextDecoder("utf-8");
+    }
+
+    /**
+     * @param {boolean} [littleEndian=true]
+     * @returns {number}
+     */
+    getInt32(littleEndian = true) {
+        const value = this.#view.getInt32(this.#offset, littleEndian);
+        this.#offset += 4;
+        return value;
+    }
+    
+    /**
+     * @param {boolean} [littleEndian=true]
+     * @returns {bigint}
+     */
+    getBigInt64(littleEndian = true) {
+        const value = this.#view.getBigInt64(this.#offset, littleEndian);
+        this.#offset += 8;
+        return value;
+    }
+
+    /**
+     * @param {boolean} [littleEndian=true]
+     * @returns {number}
+     */
+    getFloat32(littleEndian = true) {
+        const value = this.#view.getFloat32(this.#offset, littleEndian);
+        this.#offset += 4;
+        return value;
+    }
+
+    /**
+     * @returns {boolean}
+     */
+    getBoolean() {
+        const value = this.#view.getUint8(this.#offset);
+        this.#offset += 1;
+        return value !== 0;
+    }
+
+    /**
+     * @returns {string}
+     */
+    readString() {
+        const length = this.getInt32();
+        if (length === 0) {
+            return "";
+        }
+        const stringBuffer = new Uint8Array(this.#view.buffer, this.#offset, length);
+        this.#offset += length;
+        return this.#textDecoder.decode(stringBuffer);
+    }
+}

@@ -1,0 +1,58 @@
+# ==============================================================================
+# TableCompiler 全局配置文件
+# ==============================================================================
+
+[paths]
+# 所有路径都相对于项目根目录
+input_dir = "configs"
+metadata_dir = "metadata"
+output_dir = "output"
+temp_dir = "temp_generation"
+data_layout_dir = "data_layout" # 存放布局文件的目录
+
+# 如果此路径非空，所有生成的 .dat 文件将被复制到此目录。
+# 这对于将配置直接同步到游戏项目（如 Unity 的 Resources 目录）非常有用。
+# 示例: "YourUnityProject/Assets/Resources/Configs"
+binary_copy_destination = ""
+
+[file_suffixes]
+inner_type_def = ".innertypesdef.json"
+type_def = ".typedef.json"
+
+# ==============================================================================
+#  目标语言生成配置
+#  工具会为每一个 enabled = true 的 target 生成代码
+# ==============================================================================
+
+[[targets]]
+language = "csharp"
+enabled = true
+output_dir = "csharp"         # 输出到: output/csharp/
+namespace = "Game.Config"     # C# 的命名空间
+templates_dir = "config_generator/codegens/csharp/templates"
+
+[[targets]]
+language = "java"
+enabled = false
+output_dir = "java"           # 输出到: output/java/
+package = "com.game.config"   # Java 的包名
+templates_dir = "config_generator/codegens/java/templates"
+
+[[targets]]
+language = "go"
+enabled = false
+output_dir = "go"             # 输出到: output/go/
+package = "config"            # Go 的包名
+templates_dir = "config_generator/codegens/go/templates"
+
+[[targets]]
+language = "typescript"
+enabled = false
+output_dir = "typescript"     # 输出到: output/typescript/
+templates_dir = "config_generator/codegens/typescript/templates"
+
+[[targets]]
+language = "javascript"
+enabled = false
+output_dir = "javascript"   # 输出到: output/javascript/
+templates_dir = "config_generator/codegens/javascript/templates"

@@ -1,0 +1,95 @@
+{#-
+ # ==============================================================================
+ # TableCompiler Template
+ # Copyright (c) 2025, Alex Liao. All rights reserved.
+ #
+ # This template is part of the TableCompiler project.
+ # ==============================================================================
+-#}
+
+// ==============================================================================
+//  templates/go_manager.go.j2
+//  用于为“标准表格”生成数据管理器。
+// ==============================================================================
+package {{ package_name }}
+
+import (
+    "bytes"
+    "encoding/binary"
+    "fmt"
+    "strings"
+    "sync"
+)
+
+var (
+    _{{ manager_name | pascal_case(False) }}Instance *{{ manager_name }}
+    _{{ manager_name | pascal_case(False) }}Once     sync.Once
+)
+
+// {{ manager_name }} manages loading and accessing the {{ data_class_name }} configuration data.
+type {{ manager_name }} struct {
+    dataMap map[string]*{{ data_class_name }}
+}
+
+// Get{{ manager_name }} returns the singleton instance of the manager.
+func Get{{ manager_name }}() *{{ manager_name }} {
+    _{{ manager_name | pascal_case(False) }}Once.Do(func() {
+        _{{ manager_name | pascal_case(False) }}Instance = &{{ manager_name }}{
+            dataMap: make(map[string]*{{ data_class_name }}),
+        }
+    })
+    return _{{ manager_name | pascal_case(False) }}Instance
+}
+
+// Load loads configuration data from a byte array.
+func (m *{{ manager_name }}) Load(data []byte) error {
+    m.dataMap = make(map[string]*{{ data_class_name }})
+    reader := bytes.NewReader(data)
+
+    var count int32
+    if err := binary.Read(reader, binary.LittleEndian, &count); err != nil {
+        return fmt.Errorf("failed to read count: %w", err)
+    }
+
+    for i := int32(0); i < count; i++ {
+        entry := &{{ data_class_name }}{}
+        if err := entry.Read(reader); err != nil {
+            return fmt.Errorf("failed to read entry at index %d: %w", i, err)
+        }
+        key := m.getPrimaryKey(entry)
+        m.dataMap[key] = entry
+    }
+    return nil
+}
+
+// GetAll returns all configuration entries.
+func (m *{{ manager_name }}) GetAll() []*{{ data_class_name }} {
+    list := make([]*{{ data_class_name }}, 0, len(m.dataMap))
+    for _, v := range m.dataMap {
+        list = append(list, v)
+    }
+    return list
+}
+
+// Find finds a specific configuration entry by its primary key.
+func (m *{{ manager_name }}) Find(primaryKeyValues ...interface{}) *{{ data_class_name }} {
+    var sb strings.Builder
+    for i, v := range primaryKeyValues {
+        if i > 0 {
+            sb.WriteString("_")
+        }
+        sb.WriteString(fmt.Sprint(v))
+    }
+    return m.dataMap[sb.String()]
+}
+
+func (m *{{ manager_name }}) getPrimaryKey(item *{{ data_class_name }}) string {
+    var sb strings.Builder
+    {% for field in primary_key_fields %}
+    if sb.Len() > 0 {
+        sb.WriteString("_")
+    }
+    sb.WriteString(fmt.Sprint(item.{{ field }}))
+    {%- endfor %}
+    return sb.String()
+}

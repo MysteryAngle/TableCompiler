@@ -1,0 +1,36 @@
+{
+    "ExcelFileName": "Levels.xlsx",
+    "Version": "20250626_142133",
+    "TargetType": "Level",
+    "Comment": "关卡配置",
+    "ImportTypes": [
+        "InnerTypes/Item",
+        "InnerTypes/RateItem"
+    ],
+    "IsFlatTable": false,
+    "PrimaryKeyFields": [
+        "Level"
+    ],
+    "FieldSequence": [
+        {
+            "Field": "Level",
+            "Type": "int",
+            "Comment": "关卡等级，从1开始，必须为连续的整数"
+        },
+        {
+            "Field": "DataFile",
+            "Type": "string",
+            "Comment": "关卡数据文件名称，即编辑器配置的关卡文件名，如Level_1.asset，所有的关卡数据文件应该位于相同的文件夹内"
+        },
+        {
+            "Field": "ConsumeItems",
+            "Type": "array(Item)",
+            "Comment": "消耗物品列表"
+        },
+        {
+            "Field": "RewardItems",
+            "Type": "array(RateItem)[\"~\", \"#\"]",
+            "Comment": "奖励物品列表"
+        }
+    ]
+}

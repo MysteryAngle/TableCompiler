@@ -1,0 +1,21 @@
+{
+    "ImportTypes": [],
+    "TypeDefines": {
+        "Item": {
+            "TargetType": "Common/Item",
+            "Comment": "物品数据",
+            "FieldSequence": [
+                {
+                    "Field": "ItemId",
+                    "Type": "int",
+                    "Comment": "物品ID"
+                },
+                {
+                    "Field": "Count",
+                    "Type": "long",
+                    "Comment": "数量"
+                }
+            ]
+        }
+    }
+}
