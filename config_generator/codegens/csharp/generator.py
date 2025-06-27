@@ -25,6 +25,7 @@ class CodeGenerator(BaseCodeGenerator):
     """C# 代码生成器。"""
     def __init__(self, type_system: 'TypeSystem', temp_dir: str, target_config: dict):
         super().__init__(type_system, temp_dir, target_config)
+        # 初始化 Jinja2 环境，指向 C# 的模板目录
         self.jinja_env = Environment(
             loader=FileSystemLoader(self.target_config["templates_dir"]),
             trim_blocks=False,
@@ -64,7 +65,8 @@ class CodeGenerator(BaseCodeGenerator):
         coll, inner = parse_type_string(type_str)
         if coll:
             return {
-                "is_list": True,
+                "is_collection": True,
+                "collection_type": coll,
                 "type": self._get_csharp_type(type_str),
                 "list_item": self._get_read_info(inner)
             }
@@ -77,6 +79,7 @@ class CodeGenerator(BaseCodeGenerator):
         except ValueError:
             pass
 
+        # 映射到 C# BinaryReader 的方法
         read_method = "reader.ReadInt32()"
         if type_str == "long": read_method = "reader.ReadInt64()"
         elif type_str == "string": read_method = "reader.ReadString()"
@@ -84,7 +87,7 @@ class CodeGenerator(BaseCodeGenerator):
         elif type_str == "float": read_method = "reader.ReadSingle()"
         
         return {
-            "is_list": False, "type": self._get_csharp_type(type_str),
+            "is_collection": False, "type": self._get_csharp_type(type_str),
             "is_complex": is_complex, "is_enum": is_enum, "read_method": read_method
         }
 
@@ -227,7 +230,7 @@ class CodeGenerator(BaseCodeGenerator):
                 "type": self._get_csharp_type(row.type_syntax),
                 "comment": row.comment,
                 "read_info": self._get_read_info(row.type_syntax),
-                "is_list": parse_type_string(parse_unified_syntax(row.type_syntax)[0])[0] is not None,
+                "is_collection": parse_type_string(parse_unified_syntax(row.type_syntax)[0])[0] is not None,
                 "is_primitive": parse_unified_syntax(row.type_syntax)[0] in ["int","long","string","bool","float"]
             } 
             for row in table.rows
