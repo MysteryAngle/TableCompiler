@@ -1,0 +1,68 @@
+{#-
+ # ==============================================================================
+ # TableCompiler Template
+ # Copyright (c) 2025, Alex Liao. All rights reserved.
+ #
+ # This template is part of the TableCompiler project.
+ # ==============================================================================
+-#}
+
+// ==============================================================================
+//  templates/csharp_datareader.cs.j2
+//  这是一个辅助类，用于提供与 Python 写入逻辑兼容的读取方法。
+// ==============================================================================
+#nullable enable
+using System.IO;
+using System.Text;
+
+namespace {{ namespace }}
+{
+    /**
+     * <summary>
+     * A helper class to read data from a binary stream, ensuring compatibility
+     * with the Python writer's format, especially for strings.
+     * </summary>
+     */
+    public class DataReader : System.IDisposable
+    {
+        private readonly BinaryReader _reader;
+        private bool _disposed = false;
+
+        public DataReader(Stream input)
+        {
+            _reader = new BinaryReader(input, Encoding.UTF8, false);
+        }
+
+        public int ReadInt32() => _reader.ReadInt32();
+        public long ReadInt64() => _reader.ReadInt64();
+        public float ReadSingle() => _reader.ReadSingle();
+        public bool ReadBoolean() => _reader.ReadBoolean();
+
+        public string ReadString()
+        {
+            int length = _reader.ReadInt32();
+            if (length <= 0)
+            {
+                return "";
+            }
+            byte[] stringBytes = _reader.ReadBytes(length);
+            return Encoding.UTF8.GetString(stringBytes);
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            System.GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_disposed) return;
+            if (disposing)
+            {
+                _reader.Dispose();
+            }
+            _disposed = true;
+        }
+    }
+}

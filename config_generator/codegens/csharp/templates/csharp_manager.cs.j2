@@ -44,7 +44,7 @@ namespace {{ namespace }}
         {
             _dataMap.Clear();
             using var stream = new MemoryStream(bytes);
-            using var reader = new BinaryReader(stream);
+            using var reader = new DataReader(stream); // 使用自定义的 DataReader
             
             int count = reader.ReadInt32();
             for (int i = 0; i < count; i++)

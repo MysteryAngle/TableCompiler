@@ -11,7 +11,7 @@
 //  templates/csharp_flat_singleton.cs.j2
 //  用于为“平铺式表格”生成单例配置类。
 // ==============================================================================
-// #nullable enable
+#nullable enable
 using System.Collections.Generic;
 using System.IO;
 {%- for ns in imports %}
@@ -41,7 +41,6 @@ namespace {{ namespace }}
 
         private {{ class_name }}() 
         {
-            // Initialize collections with default empty instances to avoid null references.
             {%- for field in fields %}
             {%- if field.read_info.is_collection %}
                 {%- if field.read_info.collection_type == 'array' %}
@@ -60,56 +59,56 @@ namespace {{ namespace }}
         public void Load(byte[] bytes)
         {
             using var stream = new MemoryStream(bytes);
-            using var reader = new BinaryReader(stream);
+            using var reader = new DataReader(stream); // 使用自定义的 DataReader
 
-{%- for field in fields %}
-{%- if field.read_info.is_collection %}
+            {%- for field in fields %}
+            {%- if field.read_info.is_collection %}
             int count_{{ field.name }} = reader.ReadInt32();
-    {%- if field.read_info.collection_type == 'array' %}
+            {%- if field.read_info.collection_type == 'array' %}
             var array_{{ field.name }} = new {{ field.read_info.list_item.type }}[count_{{ field.name }}];
             for (int i = 0; i < count_{{ field.name }}; i++)
             {
                 {{ field.read_info.list_item.type }} listItem;
-        {%- if field.read_info.list_item.is_complex %}
+                {%- if field.read_info.list_item.is_complex %}
                 var tempObj = new {{ field.read_info.list_item.type }}();
                 tempObj.Read(reader);
                 listItem = tempObj;
-        {%- elif field.read_info.list_item.is_enum %}
+                {%- elif field.read_info.list_item.is_enum %}
                 listItem = ({{ field.read_info.list_item.type }})reader.ReadInt32();
-        {%- else %}
-                listItem = {{ field.read_info.list_item.read_method }};
-        {%- endif %}
+                {%- else %}
+                listItem = reader.{{ field.read_info.list_item.read_method }};
+                {%- endif %}
                 array_{{ field.name }}[i] = listItem;
             }
             this.{{ field.name }} = array_{{ field.name }};
-    {%- else %}
+            {%- else %}
             var list_{{ field.name }} = new {{ field.type }}(count_{{ field.name }});
             for (int i = 0; i < count_{{ field.name }}; i++)
             {
                 {{ field.read_info.list_item.type }} listItem;
-        {%- if field.read_info.list_item.is_complex %}
+                {%- if field.read_info.list_item.is_complex %}
                 var tempObj = new {{ field.read_info.list_item.type }}();
                 tempObj.Read(reader);
                 listItem = tempObj;
-        {%- elif field.read_info.list_item.is_enum %}
+                {%- elif field.read_info.list_item.is_enum %}
                 listItem = ({{ field.read_info.list_item.type }})reader.ReadInt32();
-        {%- else %}
-                listItem = {{ field.read_info.list_item.read_method }};
-        {%- endif %}
+                {%- else %}
+                listItem = reader.{{ field.read_info.list_item.read_method }};
+                {%- endif %}
                 list_{{ field.name }}.Add(listItem);
             }
             this.{{ field.name }} = list_{{ field.name }};
-    {%- endif %}
-    {%- elif field.read_info.is_complex %}
+            {%- endif %}
+            {%- elif field.read_info.is_complex %}
             var tempObj_{{field.name}} = new {{ field.type }}();
             tempObj_{{field.name}}.Read(reader);
             this.{{ field.name }} = tempObj_{{field.name}};
-    {%- elif field.read_info.is_enum %}
+            {%- elif field.read_info.is_enum %}
             this.{{ field.name }} = ({{ field.type }})reader.ReadInt32();
-    {%- else %}
-            this.{{ field.name }} = {{ field.read_info.read_method }};
-{%- endif %}
-{%- endfor %}
+            {%- else %}
+            this.{{ field.name }} = reader.{{ field.read_info.read_method }};
+            {%- endif %}
+            {%- endfor %}
         }
     }
 }

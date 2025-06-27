@@ -36,6 +36,9 @@ class CodeGenerator(BaseCodeGenerator):
 
     def generate_all(self, tables: list['ConfigTable']):
         """为所有配置表生成 C# 代码的主入口。"""
+        # 首先确保 DataReader 辅助类被生成
+        self._generate_datareader()
+
         for table in tables:
             if table.is_flat_table:
                 self.generate_flat_singleton(table)
@@ -79,12 +82,12 @@ class CodeGenerator(BaseCodeGenerator):
         except ValueError:
             pass
 
-        # 映射到 C# BinaryReader 的方法
-        read_method = "reader.ReadInt32()"
-        if type_str == "long": read_method = "reader.ReadInt64()"
-        elif type_str == "string": read_method = "reader.ReadString()"
-        elif type_str == "bool": read_method = "reader.ReadBoolean()"
-        elif type_str == "float": read_method = "reader.ReadSingle()"
+        # 映射到我们自定义的 DataReader 的方法
+        read_method = "ReadInt32()"
+        if type_str == "long": read_method = "ReadInt64()"
+        elif type_str == "string": read_method = "ReadString()"
+        elif type_str == "bool": read_method = "ReadBoolean()"
+        elif type_str == "float": read_method = "ReadSingle()"
         
         return {
             "is_collection": False, "type": self._get_csharp_type(type_str),
@@ -125,7 +128,6 @@ class CodeGenerator(BaseCodeGenerator):
             dep_type_def = self.type_system.get_type(inner)
             if "TargetType" in dep_type_def:
                 if self._generate_class_or_enum(dep_type_def):
-                    # 如果成功生成了一个新文件，则递归检查它的依赖
                     for field_def in dep_type_def.get("FieldSequence", []):
                         self._recursive_dependency_gen(field_def["Type"])
         except ValueError:
@@ -134,7 +136,6 @@ class CodeGenerator(BaseCodeGenerator):
     def _generate_class_or_enum(self, type_def: dict, struct_comment: str = "") -> bool:
         """
         生成单个类或枚举文件，如果尚未生成过。
-        返回 True 表示生成了新文件，False 表示文件已存在或无需生成。
         """
         target_path = type_def.get("TargetType", "")
         is_generatable = "FieldSequence" in type_def or type_def.get("TargetTypeAsEnum")
@@ -190,6 +191,18 @@ class CodeGenerator(BaseCodeGenerator):
             
         self.generated_files.add(filename)
         return True
+
+    def _generate_datareader(self):
+        """生成 DataReader 辅助类。"""
+        filename = "DataReader.cs"
+        if filename in self.generated_files: return
+        output_dir = os.path.join(self.temp_dir, self.target_config['output_dir'])
+        os.makedirs(output_dir, exist_ok=True)
+        template = self.jinja_env.get_template("csharp_datareader.cs.j2")
+        content = template.render(namespace=self.target_config['namespace'])
+        filepath = os.path.join(output_dir, filename)
+        with open(filepath, 'w', encoding='utf-8') as f: f.write(content)
+        self.generated_files.add(filename)
 
     def generate_standard_table(self, table: 'ConfigTable'):
         """为标准表格生成主类、依赖和管理器。"""

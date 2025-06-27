@@ -21,11 +21,12 @@ namespace {{ namespace }}
      */
     public enum {{ enum_name }}
     {
-        {% for member in members %}
+        {%- for member in members %}
         /// <summary>
         /// Represents the '{{ member.name }}' member.
         /// </summary>
-        {{ member.name }} = {{ member.value }},
-        {% endfor %}
+        {{ member.name }} = {{ member.value }},{% if not loop.last %}
+        {% endif %}
+        {%- endfor %}
     }
 }
