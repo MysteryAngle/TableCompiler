@@ -35,6 +35,7 @@ DATA_LAYOUT_DIR = cfg['paths']['data_layout_dir']
 BINARY_COPY_DEST = cfg['paths']['binary_copy_destination']
 TYPE_DEF_SUFFIX = cfg['file_suffixes']['type_def']
 INNER_TYPE_DEF_SUFFIX = cfg['file_suffixes']['inner_type_def']
+BINARY_EXTENSION = cfg['file_suffixes'].get('binary_extension', '.dat')
 
 
 def get_generator_class(language: str) -> type[BaseCodeGenerator]:
@@ -80,7 +81,7 @@ def generate(force, debug):
             binary_data, layout_text = binary_writer.write(table)
             
             # 写入二进制文件
-            dat_filepath = os.path.join(temp_data_dir, f"{table.base_name}.dat")
+            dat_filepath = os.path.join(temp_data_dir, f"{table.base_name}{BINARY_EXTENSION}")
             with open(dat_filepath, 'wb') as f: f.write(binary_data)
             click.echo(f"    - 已生成: {os.path.relpath(dat_filepath)}")
 
