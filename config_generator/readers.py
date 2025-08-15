@@ -37,54 +37,62 @@ def parse_type_string(type_str):
 
 class TypeSystem:
     """
-    管理所有已加载的类型定义。
+    管理所有已加载的类型定义和默认解析模式。
     它会递归加载所有导入的 .innertypesdef.json 文件，并提供一个统一的接口来查询类型。
     """
-    def __init__(self):
+    def __init__(self, metadata_dir: str):
         self._loaded_types = {}
+        self._default_schemas = {}
+        self.metadata_dir = metadata_dir # 存储元数据根目录
 
-    def load_type_def(self, def_path: str, silent: bool = False):
-        """加载并解析一个类型定义文件。"""
-        abs_path = os.path.abspath(def_path)
+    def load_type_def(self, rel_path_from_meta: str, silent: bool = False):
+        """
+        加载并解析一个 .innertypesdef.json 文件。
+        路径总是相对于 metadata 根目录，且不包含后缀。
+        """
+        full_path = os.path.join(self.metadata_dir, f"{rel_path_from_meta}.innertypesdef.json")
+        abs_path = os.path.abspath(full_path)
+
         if abs_path in self._loaded_types.get("@@files", set()):
             return
         
         if not silent:
-            print(f"  -> 加载类型定义: {os.path.basename(def_path)}")
+            print(f"  -> 加载类型定义: {os.path.basename(full_path)}")
         
         try:
             with open(abs_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-        except (json.JSONDecodeError, FileNotFoundError) as e:
+        except FileNotFoundError:
+            raise FileNotFoundError(f"找不到导入的类型定义文件: {full_path}")
+        except json.JSONDecodeError as e:
             raise ValueError(f"'{abs_path}' 文件错误: {e}")
-
-        # 记录已加载文件，防止循环导入
+        
         self._loaded_types.setdefault("@@files", set()).add(abs_path)
 
-        # 递归加载导入的类型
-        base_dir = os.path.dirname(abs_path)
+        # 递归加载导入的类型，路径同样相对于 metadata 根目录
         for p in data.get("ImportTypes", []):
-            # 导入路径是相对于当前元数据文件的
-            import_path = os.path.join(base_dir, f"{p}.innertypesdef.json")
-            self.load_type_def(import_path, silent)
-
-        # 存储当前文件中的类型定义
+            self.load_type_def(p, silent)
+        
         for name, info in data.get("TypeDefines", {}).items():
-            if name in self._loaded_types:
-                print(f"警告: 类型 '{name}' 被重复定义。")
             self._loaded_types[name] = info
+        
+        for type_expr, schema in data.get("SourceSchemas", {}).items():
+            self._default_schemas[type_expr] = schema
 
     def get_type(self, name: str) -> dict:
         """根据名称获取类型定义。"""
         if name in self._loaded_types:
             return self._loaded_types[name]
         
-        # 对于原生集合或基础类型，返回一个模拟定义
         coll, _ = parse_type_string(name)
         if coll or name in ["int", "long", "string", "bool", "float"]:
             return {"TargetType": name}
             
         raise ValueError(f"类型 '{name}' 未在任何 .typedef 或 .innertypesdef 文件中定义。")
+    
+    def get_default_schema(self, type_expr: str) -> dict | None:
+        """根据完整的类型表达式获取默认的解析模式。"""
+        return self._default_schemas.get(type_expr)
 
     def get_all_custom_type_names(self) -> list[str]:
         """获取所有已加载的自定义类型名称。"""
@@ -98,16 +106,26 @@ class ConfigReader:
         self.input_dir = input_dir
         self.metadata_dir = metadata_dir
         self.typedef_suffix = typedef_suffix
-        self.type_system = TypeSystem()
+        self.type_system = TypeSystem(self.metadata_dir)
         self._scan_all_innertypes()
 
     def _scan_all_innertypes(self):
         """预扫描并加载 metadata 目录下的所有 innertype 定义。"""
+        suffix = ".innertypesdef.json"
         for root, _, files in os.walk(self.metadata_dir):
             for file in files:
-                if file.endswith(".innertypesdef.json"):
+                if file.endswith(suffix):
                     try:
-                        self.type_system.load_type_def(os.path.join(root, file), silent=True)
+                        full_path = os.path.join(root, file)
+                        rel_path = os.path.relpath(full_path, self.metadata_dir)
+                        
+                        # 可靠地移除后缀，避免 `splitext` 的问题
+                        if rel_path.endswith(suffix):
+                            rel_path_no_ext = rel_path[:-len(suffix)]
+                        else:
+                            rel_path_no_ext = os.path.splitext(rel_path)[0]
+
+                        self.type_system.load_type_def(rel_path_no_ext.replace('\\', '/'), silent=True)
                     except ValueError as e:
                         print(f"警告: 无法解析 {file}。错误: {e}")
 
@@ -128,7 +146,7 @@ class ConfigReader:
                 typedef_data = json.load(f)
             
             for imp in typedef_data.get("ImportTypes", []):
-                self.type_system.load_type_def(os.path.join(self.metadata_dir, f"{imp}.innertypesdef.json"))
+                self.type_system.load_type_def(imp)
 
             main_type_name = typedef_data["TargetType"]
             if not typedef_data.get("IsFlatTable"):
@@ -137,7 +155,7 @@ class ConfigReader:
 
             workbook = openpyxl.load_workbook(os.path.join(self.input_dir, excel_file), data_only=True)
             sheet = workbook.worksheets[0]
-
+            
             # 优先使用 typedef 文件中定义的 Comment
             table_comment = typedef_data.get("Comment") or sheet.cell(row=1, column=1).value or f"由 {excel_file} 生成的配置"
 
@@ -168,8 +186,8 @@ class ConfigReader:
             val_idx = header.index('Value')
             cmt_idx = header.index('Comment') if 'Comment' in header else -1
         except ValueError as e:
-            raise ValueError(f"平铺表 '{table.excel_file_name}' 缺少必需的列: {e}。应包含 'Key', 'Type', 'Value'。")
-
+            raise ValueError(f"平铺表 '{table.excel_file_name}' 缺少必需的列: {e}。应包含 'Key', 'Type', 'Value', 'Comment'(可选)。")
+            
         for row_data in sheet.iter_rows(min_row=2, values_only=True):
             if row_data[key_idx] is None:
                 continue
@@ -192,7 +210,7 @@ class ConfigReader:
             table.rows.append(ConfigRow(
                 key=field_name,
                 type_syntax=field_def.get("Type", "string"),
-                comment=field_def.get("Comment", "") # 从 typedef 中获取注释
+                comment=field_def.get("Comment", "")
             ))
         
         # 读取数据行
@@ -204,6 +222,6 @@ class ConfigReader:
             for field in table.rows:
                 col_idx = headers.get(field.key)
                 if col_idx is None:
-                    raise ValueError(f"'{table.excel_file_name}' 的 Excel 文件中缺少在 typedef 中定义的列 '{field.key}'。")
+                    raise ValueError(f"'{table.excel_file_name}' 的 Excel 文件中缺少列 '{field.key}'。")
                 ordered_row.append(row_data[col_idx])
             table.data_rows.append(ordered_row)

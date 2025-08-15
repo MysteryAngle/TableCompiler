@@ -70,7 +70,18 @@ def _create_new_inner_type_interactive(type_system: TypeSystem, metadata_dir: st
             if field_def:
                 new_def["FieldSequence"].append(field_def)
 
+    # 询问是否定义默认解析模式
+    source_schemas = {}
+    if click.confirm(f"\n是否要为此类型 '{name}' 定义默认的字符串解析模式 (SourceSchemas)?", default=False):
+        while True:
+            type_expr = click.prompt("请输入一个完整的类型表达式 (如 list(Item) 或 Item)，或留空完成", default="", show_default=False)
+            if not type_expr: break
+            delimiters_str = click.prompt(f"请输入 '{type_expr}' 对应的分隔符, 空格分隔 (如 ~ #)")
+            source_schemas[type_expr] = {"string_delimiters": delimiters_str.split(" ")}
+
     data = {"ImportTypes": [], "TypeDefines": { name: new_def } }
+    if source_schemas:
+        data["SourceSchemas"] = source_schemas
     
     if os.path.exists(abs_path) and not click.confirm(f"'{os.path.basename(abs_path)}' 已存在。要覆盖它吗?", default=False):
         click.echo("操作已取消。")
